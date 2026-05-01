@@ -1,0 +1,16 @@
+flask
+pymongo
+opencv-contrib-python
+numpy
+customtkinter
+pillow
+bcrypt
+pandas
+openpyxl
+face_recognition
+cmake
+dlib
+tkcalendar
+werkzeug
+matplotlib>=3.7.0
+schedule

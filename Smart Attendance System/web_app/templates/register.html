@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Registration - Smart Attendance</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        #camera-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        video,
+        canvas {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            max-width: 100%;
+        }
+
+        #camera-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .btn-cam {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            transition: opacity 0.2s;
+        }
+
+        .btn-start {
+            background-color: #28a745;
+        }
+
+        .btn-capture {
+            background-color: #007bff;
+        }
+
+        .btn-retake {
+            background-color: #dc3545;
+        }
+
+        .btn-cam:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>🎓 Student Registration</h2>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form action="{{ url_for('register') }}" method="POST" id="regForm">
+            <div class="form-group">
+                <label for="student_id">Student ID</label>
+                <input type="text" id="student_id" name="student_id" placeholder="e.g. STU101" required>
+            </div>
+
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" placeholder="John Doe" required>
+            </div>
+
+            <div class="form-group">
+                <label for="department">Department</label>
+                <select id="department" name="department" required>
+                    <option value="" disabled selected>Select Department</option>
+                    <option value="CSE">CSE</option>
+                    <option value="ECE">ECE</option>
+                    <option value="MECH">MECH</option>
+                    <option value="CIVIL">CIVIL</option>
+                    <option value="AI&DS">AI & DS</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="year">Year</label>
+                <select id="year" name="year" required>
+                    <option value="" disabled selected>Select Year</option>
+                    <option value="1st">1st Year</option>
+                    <option value="2nd">2nd Year</option>
+                    <option value="3rd">3rd Year</option>
+                    <option value="4th">4th Year</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email ID</label>
+                <input type="email" id="email" name="email" placeholder="example@college.edu" required>
+            </div>
+
+            <div class="form-group">
+                <label for="mobile">Mobile Number</label>
+                <input type="text" id="mobile" name="mobile" pattern="[0-9]{10}" placeholder="10-digit mobile number"
+                    title="Please enter a valid 10-digit mobile number" required>
+            </div>
+
+            <div class="form-group">
+                <label>Face Capture (Auto-Record 30 Frames)</label>
+                <div id="camera-container">
+                    <div style="position: relative;">
+                        <!-- Visual Guide Overlay -->
+                        <div id="guide-overlay"
+                            style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0.7;">
+                            <div class="face-guide"></div>
+                        </div>
+                        <video id="video" width="320" height="240" autoplay></video>
+                        <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
+                    </div>
+
+                    <!-- Hidden Input for JSON Data -->
+                    <input type="hidden" name="images_json" id="images_json">
+
+                    <div id="instruction-text"
+                        style="font-weight: bold; margin: 10px 0; color: #007bff; text-align: center;">
+                        Click Start, then slowly ROTATE your head (Left, Right, Up, Down) while we capture.
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="progress"
+                        style="width: 100%; height: 20px; background-color: #ddd; border-radius: 10px; margin-bottom: 10px; display: none;"
+                        id="progress-container">
+                        <div id="progress-bar" class="progress-bar" role="progressbar"
+                            style="width: 0%; height: 100%; background-color: #28a745; border-radius: 10px; transition: width 0.1s;">
+                        </div>
+                    </div>
+
+                    <div id="camera-controls">
+                        <button type="button" class="btn-cam btn-start" id="startBtn">Start Camera</button>
+                        <button type="button" class="btn-cam btn-capture" id="recordBtn" disabled>Start
+                            Recording</button>
+                        <button type="button" class="btn-cam btn-retake" id="retakeBtn"
+                            style="display:none;">Retake</button>
+                    </div>
+
+                    <div id="cam-status" style="margin-top:5px; font-size:0.9rem; color: #666;"></div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-submit" id="submitBtn" disabled>Register Student</button>
+        </form>
+    </div>
+
+    <style>
+        .face-guide {
+            width: 150px;
+            height: 180px;
+            border: 3px dashed rgba(255, 255, 255, 0.8);
+            border-radius: 50% 50% 40% 40%;
+            animation: breathe 2s infinite ease-in-out;
+        }
+
+        @keyframes breathe {
+            0% {
+                transform: scale(1);
+                border-color: rgba(255, 255, 255, 0.8);
+            }
+
+            50% {
+                transform: scale(1.05);
+                border-color: #007bff;
+            }
+
+            100% {
+                transform: scale(1);
+                border-color: rgba(255, 255, 255, 0.8);
+            }
+        }
+    </style>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const startBtn = document.getElementById('startBtn');
+        const recordBtn = document.getElementById('recordBtn');
+        const retakeBtn = document.getElementById('retakeBtn');
+        const submitBtn = document.getElementById('submitBtn');
+        const status = document.getElementById('cam-status');
+        const instructionText = document.getElementById('instruction-text');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const imagesInput = document.getElementById('images_json');
+
+        let stream = null;
+        let capturedImages = [];
+        let captureInterval = null;
+        const TARGET_FRAMES = 30;
+        const CAPTURE_DELAY_MS = 150; // Capture every 150ms -> ~4.5 seconds total
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                status.textContent = "Camera active.";
+                startBtn.style.display = 'none';
+                recordBtn.disabled = false;
+            } catch (err) {
+                console.error("Error regarding camera: ", err);
+                status.textContent = "Error: Cannot access camera.";
+                status.style.color = "red";
+            }
+        });
+
+        recordBtn.addEventListener('click', () => {
+            capturedImages = [];
+            let count = 0;
+
+            recordBtn.disabled = true;
+            retakeBtn.style.display = 'none';
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+
+            status.textContent = "Recording... Please ROTATE your head slowly.";
+            status.style.color = "#007bff";
+
+            captureInterval = setInterval(() => {
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, 320, 240);
+                const dataURL = canvas.toDataURL('image/jpeg', 0.7); // 0.7 quality to reduce size
+                capturedImages.push(dataURL);
+                count++;
+
+                // Update Progress
+                const percent = (count / TARGET_FRAMES) * 100;
+                progressBar.style.width = percent + '%';
+
+                if (count >= TARGET_FRAMES) {
+                    clearInterval(captureInterval);
+                    finishRecording();
+                }
+            }, CAPTURE_DELAY_MS);
+        });
+
+        function finishRecording() {
+            status.textContent = "Capture Complete! Processing...";
+            status.style.color = "green";
+
+            // Serialize
+            imagesInput.value = JSON.stringify(capturedImages);
+
+            // UI Updates
+            instructionText.innerText = `Captured ${capturedImages.length} frames. Ready to register.`;
+            video.style.display = 'none';
+
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            recordBtn.style.display = 'none';
+            retakeBtn.style.display = 'inline-block';
+            submitBtn.disabled = false;
+        }
+
+        retakeBtn.addEventListener('click', () => {
+            location.reload(); // Simple reload to restart camera cleanly
+        });
+    </script>
+</body>
+
+</html>
